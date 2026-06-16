@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+python-multipart==0.0.20
+requests==2.32.3
+pypdf==5.1.0
+pillow==11.0.0
+pytesseract==0.3.13
+moviepy==1.0.3
+openai==1.58.1

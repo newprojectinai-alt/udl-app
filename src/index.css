@@ -1,0 +1,184 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 160 60% 45%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 210 20% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 217 91% 95%;
+    --accent-foreground: 217 91% 40%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 217 91% 60%;
+    --radius: 0.75rem;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 210 20% 90%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 18%;
+    --sidebar-accent-foreground: 210 20% 90%;
+    --sidebar-border: 222 47% 18%;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+    margin: 0;
+  }
+  h1, h2, h3, h4 {
+    @apply font-poppins;
+  }
+}
+
+@layer components {
+  .edu-animated-bg {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.24), transparent 28%),
+      radial-gradient(circle at 80% 10%, rgba(168, 85, 247, 0.22), transparent 28%),
+      radial-gradient(circle at 70% 85%, rgba(16, 185, 129, 0.22), transparent 30%),
+      linear-gradient(135deg, #eff6ff 0%, #ffffff 48%, #fff7ed 100%);
+  }
+
+  .edu-animated-bg::before,
+  .edu-animated-bg::after {
+    content: "";
+    position: absolute;
+    width: 28rem;
+    height: 28rem;
+    border-radius: 9999px;
+    filter: blur(38px);
+    opacity: 0.45;
+    pointer-events: none;
+    animation: neon-drift 14s ease-in-out infinite alternate;
+  }
+
+  .edu-animated-bg::before {
+    top: -8rem;
+    left: -8rem;
+    background: rgba(37, 99, 235, 0.42);
+  }
+
+  .edu-animated-bg::after {
+    right: -10rem;
+    bottom: -9rem;
+    background: rgba(245, 158, 11, 0.38);
+    animation-delay: -5s;
+  }
+
+  .edu-grid-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.28;
+    background-image:
+      linear-gradient(rgba(37, 99, 235, 0.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37, 99, 235, 0.16) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: linear-gradient(to bottom, black, transparent 85%);
+    animation: grid-slide 18s linear infinite;
+  }
+
+  .edu-float {
+    position: absolute;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    border-radius: 1.5rem;
+    color: rgba(15, 23, 42, 0.72);
+    background: rgba(255, 255, 255, 0.62);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 18px 50px rgba(37, 99, 235, 0.18);
+    backdrop-filter: blur(12px);
+    animation: float-soft 7s ease-in-out infinite;
+  }
+
+  .edu-float:nth-child(2n) {
+    animation-delay: -2.5s;
+  }
+
+  .edu-float:nth-child(3n) {
+    animation-delay: -4.5s;
+  }
+
+  .neon-card {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .neon-card::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    z-index: 0;
+    background: linear-gradient(120deg, rgba(59, 130, 246, 0.65), rgba(168, 85, 247, 0.55), rgba(16, 185, 129, 0.55), rgba(245, 158, 11, 0.65));
+    opacity: 0;
+    transition: opacity 180ms ease;
+    animation: shimmer-spin 6s linear infinite;
+  }
+
+  .neon-card:hover::before,
+  .neon-card-active::before {
+    opacity: 1;
+  }
+
+  .neon-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .motion-pop {
+    animation: motion-pop 650ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+
+@keyframes neon-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  100% { transform: translate3d(4rem, 3rem, 0) scale(1.12); }
+}
+
+@keyframes grid-slide {
+  from { background-position: 0 0; }
+  to { background-position: 44px 44px; }
+}
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-22px) rotate(4deg); }
+}
+
+@keyframes shimmer-spin {
+  from { filter: hue-rotate(0deg); }
+  to { filter: hue-rotate(360deg); }
+}
+
+@keyframes motion-pop {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edu-animated-bg::before,
+  .edu-animated-bg::after,
+  .edu-grid-overlay,
+  .edu-float,
+  .neon-card::before,
+  .motion-pop {
+    animation: none !important;
+  }
+}

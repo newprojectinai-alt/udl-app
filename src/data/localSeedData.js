@@ -1,0 +1,57 @@
+export const seedData = {
+  users: [
+    { id: 'user-admin', email: 'admin@udl.local', full_name: 'Admin User', role: 'admin' },
+    { id: 'user-teacher', email: 'teacher@udl.local', full_name: 'Teacher User', role: 'teacher' },
+    { id: 'user-student', email: 'student@udl.local', full_name: 'Student User', role: 'student' },
+  ],
+  Textbook: [
+    {
+      id: 'textbook-science-7',
+      title: 'Science Class 7',
+      class_level: '7',
+      subject: 'Science',
+      file_url: '',
+      chapters: ['Nutrition in Plants', 'Heat', 'Acids Bases and Salts'],
+      uploaded_by: 'admin@udl.local',
+      status: 'ready',
+      created_date: new Date().toISOString(),
+    },
+    {
+      id: 'textbook-math-7',
+      title: 'Mathematics Class 7',
+      class_level: '7',
+      subject: 'Mathematics',
+      file_url: '',
+      chapters: ['Integers', 'Fractions and Decimals', 'Simple Equations'],
+      uploaded_by: 'admin@udl.local',
+      status: 'ready',
+      created_date: new Date().toISOString(),
+    },
+  ],
+  StudentProfile: [
+    {
+      id: 'student-profile-demo',
+      user_email: 'student@udl.local',
+      full_name: 'Student User',
+      class_level: '7',
+      disability_types: ['visual'],
+      iq_level: 'standard',
+      assigned_teacher: 'teacher@udl.local',
+      preferred_subjects: ['Science', 'Mathematics'],
+      created_date: new Date().toISOString(),
+    },
+  ],
+  TeacherProfile: [
+    {
+      id: 'teacher-profile-demo',
+      user_email: 'teacher@udl.local',
+      full_name: 'Teacher User',
+      subjects: ['Science', 'Mathematics'],
+      class_levels: ['7', '8'],
+      assigned_students: ['student@udl.local'],
+      created_date: new Date().toISOString(),
+    },
+  ],
+  LessonContent: [],
+  Assessment: [],
+};

@@ -1,0 +1,76 @@
+C:\Users\rojin\OneDrive\Documents\New project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\pydub\utils.py:170: RuntimeWarning: Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work
+  warn("Couldn't find ffmpeg or avconv - defaulting to ffmpeg, but may not work", RuntimeWarning)
+Animation 0: FadeIn(Text('UDL Lesson')):   0%|          | 0/8 [00:00<?, ?it/s]Animation 0: FadeIn(Text('UDL Lesson')): 100%|##########| 8/8 [00:00<00:00, 80.00it/s]                                                                                      ┌───────────────────── Traceback (most recent call last) ─────────────────────┐
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\manim\cl │
+│ i\render\commands.py:125 in render                                          │
+│                                                                             │
+│   122 │   │   │   try:                                                      │
+│   123 │   │   │   │   with tempconfig({}):                                  │
+│   124 │   │   │   │   │   scene = SceneClass()                              │
+│ > 125 │   │   │   │   │   scene.render()                                    │
+│   126 │   │   │   except Exception:                                         │
+│   127 │   │   │   │   error_console.print_exception()                       │
+│   128 │   │   │   │   sys.exit(1)                                           │
+│                                                                             │
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\manim\sc │
+│ ene\scene.py:237 in render                                                  │
+│                                                                             │
+│    234 │   │   """                                                          │
+│    235 │   │   self.setup()                                                 │
+│    236 │   │   try:                                                         │
+│ >  237 │   │   │   self.construct()                                         │
+│    238 │   │   except EndSceneEarlyException:                               │
+│    239 │   │   │   pass                                                     │
+│    240 │   │   except RerunSceneException:                                  │
+│                                                                             │
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\manim_jobs\3bc7cfa9-780f-479b-90 │
+│ 46-3fd761a0d70a\lesson_animation.py:14 in construct                         │
+│                                                                             │
+│   11 │   │   lesson_title = Text(DATA["title"], font_size=30, color=BLUE_E, │
+│   12 │   │   self.play(FadeIn(lesson_title, shift=DOWN), run_time=0.5)      │
+│   13 │   │   for index, scene in enumerate(DATA["scenes"]):                 │
+│ > 14 │   │   │   self.play(*[FadeOut(mob) for mob in self.mobjects if mob i │
+│   15 │   │   │   self.render_scene(scene, index + 1, len(DATA["scenes"]))   │
+│   16 │   │   self.play(FadeOut(*self.mobjects), run_time=0.4)               │
+│   17                                                                        │
+│                                                                             │
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\manim\sc │
+│ ene\scene.py:1125 in play                                                   │
+│                                                                             │
+│   1122 │   │   │   return                                                   │
+│   1123 │   │                                                                │
+│   1124 │   │   start_time = self.time                                       │
+│ > 1125 │   │   self.renderer.play(self, *args, **kwargs)                    │
+│   1126 │   │   run_time = self.time - start_time                            │
+│   1127 │   │   if subcaption:                                               │
+│   1128 │   │   │   if subcaption_duration is None:                          │
+│                                                                             │
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\manim\re │
+│ nderer\cairo_renderer.py:71 in play                                         │
+│                                                                             │
+│    68 │   │   self.skip_animations = self._original_skipping_status         │
+│    69 │   │   self.update_skipping_status()                                 │
+│    70 │   │                                                                 │
+│ >  71 │   │   scene.compile_animation_data(*args, **kwargs)                 │
+│    72 │   │                                                                 │
+│    73 │   │   if self.skip_animations:                                      │
+│    74 │   │   │   logger.debug(f"Skipping animation {self.num_plays}")      │
+│                                                                             │
+│ C:\Users\rojin\OneDrive\Documents\New                                       │
+│ project\udl-standalone-app-source2\backend\.venv\Lib\site-packages\manim\sc │
+│ ene\scene.py:1234 in compile_animation_data                                 │
+│                                                                             │
+│   1231 │   │   # NOTE TODO : returns statement of this method are wrong. It │
+│   1232 │   │   # The return are kept to keep webgl renderer from breaking.  │
+│   1233 │   │   if len(animations) == 0:                                     │
+│ > 1234 │   │   │   raise ValueError("Called Scene.play with no animations") │
+│   1235 │   │                                                                │
+│   1236 │   │   self.animations = self.compile_animations(*animations, **pla │
+│   1237 │   │   self.add_mobjects_from_animations(self.animations)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+ValueError: Called Scene.play with no animations
