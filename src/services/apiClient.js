@@ -1,5 +1,13 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, '');
 export const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
+
+export function resolveApiUrl(path) {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
+}
 
 async function parseResponse(response) {
   const data = await response.json().catch(() => null);
@@ -10,11 +18,11 @@ async function parseResponse(response) {
 }
 
 export async function apiGet(path) {
-  return parseResponse(await fetch(`${API_BASE_URL}${path}`));
+  return parseResponse(await fetch(resolveApiUrl(path)));
 }
 
 export async function apiPost(path, body) {
-  return parseResponse(await fetch(`${API_BASE_URL}${path}`, {
+  return parseResponse(await fetch(resolveApiUrl(path), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -22,7 +30,7 @@ export async function apiPost(path, body) {
 }
 
 export async function apiPatch(path, body) {
-  return parseResponse(await fetch(`${API_BASE_URL}${path}`, {
+  return parseResponse(await fetch(resolveApiUrl(path), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -30,11 +38,11 @@ export async function apiPatch(path, body) {
 }
 
 export async function apiDelete(path) {
-  return parseResponse(await fetch(`${API_BASE_URL}${path}`, { method: 'DELETE' }));
+  return parseResponse(await fetch(resolveApiUrl(path), { method: 'DELETE' }));
 }
 
 export async function apiUpload(path, formData) {
-  return parseResponse(await fetch(`${API_BASE_URL}${path}`, {
+  return parseResponse(await fetch(resolveApiUrl(path), {
     method: 'POST',
     body: formData,
   }));

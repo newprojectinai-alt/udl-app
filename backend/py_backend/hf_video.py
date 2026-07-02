@@ -1,5 +1,7 @@
 import json
+import time
 from pathlib import Path
+from urllib.parse import urljoin
 
 import requests
 
@@ -28,6 +30,22 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
     elif config.HF_TOKEN:
         headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
 
+    if config.VIDEO_API_MODE == "async":
+        render_async_video(endpoint, headers, payload, output_file)
+    else:
+        render_sync_video(endpoint, headers, payload, output_file)
+
+    if audio_path and Path(audio_path).exists():
+        attach_audio(output_file, Path(audio_path))
+
+    return {
+        "output_file": output_file,
+        "prompt": prompt,
+        "endpoint": endpoint,
+    }
+
+
+def render_sync_video(endpoint: str, headers: dict, payload: dict, output_file: Path):
     try:
         response = requests.post(
             endpoint,
@@ -49,28 +67,83 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
     if response.status_code >= 400:
         raise RuntimeError(format_hf_error(response))
 
+    save_video_response(response, output_file)
+
+
+def render_async_video(endpoint: str, headers: dict, payload: dict, output_file: Path):
+    request_timeout = min(config.VIDEO_API_REQUEST_TIMEOUT_SECONDS, config.HF_VIDEO_TIMEOUT_SECONDS)
+    try:
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=request_timeout)
+    except requests.exceptions.RequestException as exc:
+        raise RuntimeError(f"Could not submit the CogVideoX job: {exc}") from exc
+
+    if response.status_code >= 400:
+        raise RuntimeError(format_hf_error(response))
+
+    job_data = parse_json_response(response)
+    job_id = job_data.get("id") or job_data.get("job_id")
+    if not job_id:
+        raise RuntimeError(f"CogVideoX did not return a job id. Response: {json.dumps(job_data)[:800]}")
+
+    status_url = absolute_api_url(endpoint, job_data.get("status_url") or f"{endpoint.rstrip('/')}/{job_id}")
+    result_url = job_data.get("result_url")
+    deadline = time.monotonic() + config.HF_VIDEO_TIMEOUT_SECONDS
+
+    while time.monotonic() < deadline:
+        remaining = max(1, int(deadline - time.monotonic()))
+        try:
+            status_response = requests.get(
+                status_url,
+                headers=headers,
+                timeout=min(config.VIDEO_API_REQUEST_TIMEOUT_SECONDS, remaining),
+            )
+        except requests.exceptions.RequestException as exc:
+            raise RuntimeError(f"Could not check CogVideoX job {job_id}: {exc}") from exc
+
+        if status_response.status_code >= 400:
+            raise RuntimeError(format_hf_error(status_response))
+
+        status_data = parse_json_response(status_response)
+        status = str(status_data.get("status") or "").lower()
+        result_url = status_data.get("result_url") or result_url
+
+        if status in {"completed", "succeeded", "success"}:
+            if not result_url:
+                result_url = f"{endpoint.rstrip('/')}/{job_id}/result"
+            download_video(absolute_api_url(endpoint, result_url), output_file, headers=headers)
+            return
+        if status in {"failed", "error", "cancelled"}:
+            message = status_data.get("error") or status_data.get("message") or "Unknown GPU worker error"
+            raise RuntimeError(f"CogVideoX job {job_id} failed: {message}")
+
+        time.sleep(min(config.VIDEO_API_POLL_SECONDS, max(1, remaining)))
+
+    raise RuntimeError(
+        f"CogVideoX job {job_id} timed out after {config.HF_VIDEO_TIMEOUT_SECONDS} seconds."
+    )
+
+
+def absolute_api_url(endpoint: str, value: str):
+    if value.startswith(("http://", "https://")):
+        return value
+    return urljoin(f"{endpoint.rstrip('/')}/", value)
+
+
+def save_video_response(response: requests.Response, output_file: Path):
     content_type = response.headers.get("content-type", "").lower()
     output_file.parent.mkdir(parents=True, exist_ok=True)
 
     if "video" in content_type or response.content[:8].startswith(b"\x00\x00\x00"):
         output_file.write_bytes(response.content)
-    else:
-        data = parse_json_response(response)
-        video_url = data.get("video_url") or data.get("url") or data.get("output")
-        if isinstance(video_url, list):
-            video_url = video_url[0] if video_url else None
-        if not video_url:
-            raise RuntimeError(f"Hugging Face did not return a video file. Response: {json.dumps(data)[:800]}")
-        download_video(video_url, output_file)
+        return
 
-    if audio_path and Path(audio_path).exists():
-        attach_audio(output_file, Path(audio_path))
-
-    return {
-        "output_file": output_file,
-        "prompt": prompt,
-        "endpoint": endpoint,
-    }
+    data = parse_json_response(response)
+    video_url = data.get("video_url") or data.get("url") or data.get("output")
+    if isinstance(video_url, list):
+        video_url = video_url[0] if video_url else None
+    if not video_url:
+        raise RuntimeError(f"Video provider did not return a video file. Response: {json.dumps(data)[:800]}")
+    download_video(video_url, output_file)
 
 
 def get_hf_endpoint():
@@ -105,10 +178,14 @@ def build_video_prompt(job: dict):
     ).strip()
 
 
-def download_video(url: str, output_file: Path):
-    response = requests.get(url, timeout=config.HF_VIDEO_TIMEOUT_SECONDS)
+def download_video(url: str, output_file: Path, headers: dict | None = None):
+    response = requests.get(
+        url,
+        headers=headers or {},
+        timeout=min(config.HF_VIDEO_TIMEOUT_SECONDS, 300),
+    )
     if response.status_code >= 400:
-        raise RuntimeError(f"Could not download generated Hugging Face video: HTTP {response.status_code}")
+        raise RuntimeError(f"Could not download generated video: HTTP {response.status_code}")
     output_file.write_bytes(response.content)
 
 
@@ -145,15 +222,17 @@ def parse_json_response(response):
 
 
 def format_hf_error(response):
+    provider_name = "CogVideoX" if config.VIDEO_API_ENDPOINT else "Hugging Face"
     try:
         data = response.json()
         message = data.get("error") or data.get("message") or json.dumps(data)
     except Exception:
         message = response.text
     if response.status_code == 401:
-        return "Hugging Face rejected the request. Check HF_TOKEN in backend/.env."
+        token_name = "VIDEO_API_TOKEN" if config.VIDEO_API_ENDPOINT else "HF_TOKEN"
+        return f"{provider_name} rejected the request. Check {token_name} in backend/.env."
     if response.status_code == 404:
-        return "Hugging Face model/endpoint not found. Check HF_VIDEO_MODEL or HF_VIDEO_ENDPOINT in backend/.env."
+        return f"{provider_name} endpoint was not found. Check the configured video endpoint."
     if response.status_code in {429, 503}:
-        return f"Hugging Face video service is busy or rate-limited ({response.status_code}). Try again later or use a paid Inference Endpoint. Details: {message[:500]}"
-    return f"Hugging Face video generation failed ({response.status_code}): {message[:800]}"
+        return f"{provider_name} is busy or rate-limited ({response.status_code}). Details: {message[:500]}"
+    return f"{provider_name} video generation failed ({response.status_code}): {message[:800]}"

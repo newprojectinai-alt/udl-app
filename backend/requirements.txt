@@ -8,3 +8,4 @@ pillow==11.0.0
 pytesseract==0.3.13
 moviepy==1.0.3
 openai==1.58.1
+boto3>=1.35.0,<2.0.0

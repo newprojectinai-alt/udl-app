@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { lessonService, studentService } from '@/services/entityService';
-import { USE_BACKEND } from '@/services/apiClient';
+import { resolveApiUrl, USE_BACKEND } from '@/services/apiClient';
 import { backendVideoService } from '@/services/backendServices';
 import { ArrowLeft, BookOpen, Brain, ChevronLeft, ChevronRight, Ear, Eye, Lightbulb, MessageSquare, PauseCircle, PlayCircle, Volume2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -356,7 +356,7 @@ function VideoPipelinePanel({ videoJob, loading, renderLoading, error, onGenerat
             {videoJob.error_message && <p className="text-xs text-red-600 mt-1">{videoJob.error_message}</p>}
           </div>
           {videoJob.video_url ? (
-            <video src={`http://localhost:5000${videoJob.video_url}`} controls className="w-full rounded-xl border border-border" />
+            <video src={resolveApiUrl(videoJob.video_url)} controls className="w-full rounded-xl border border-border" />
           ) : (
             <div className="rounded-xl border border-dashed border-border p-4">
               <p className="text-sm font-medium mb-2">AI storyboard timeline created</p>

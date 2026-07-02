@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from py_backend import config
@@ -26,6 +26,7 @@ from py_backend.database import (
     update_record,
 )
 from py_backend.rag import create_textbook_chunks, retrieve_relevant_chunks
+from py_backend.storage import local_media_path, object_key, presigned_media_url, upload_media, uses_s3
 from py_backend.text_processing import extract_text_from_image, extract_text_from_pdf, infer_chapters_locally
 from py_backend.video import create_video_job_for_lesson, get_latest_video_job_for_lesson, render_video_job
 
@@ -34,7 +35,12 @@ app = FastAPI(title="UDL Learn Python API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[config.FRONTEND_URL, "http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=list(dict.fromkeys([
+        *config.FRONTEND_URLS,
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ])),
+    allow_origin_regex=config.CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,7 +64,26 @@ async def generic_exception_handler(_request: Request, exc: Exception):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "name": "UDL Learn Python API"}
+    return {
+        "ok": True,
+        "name": "UDL Learn Python API",
+        "storage": "s3" if uses_s3() else "local",
+        "video_api_mode": config.VIDEO_API_MODE,
+    }
+
+
+@app.get("/api/media/{category}/{filename}")
+def media_file(category: str, filename: str):
+    try:
+        if uses_s3():
+            return RedirectResponse(presigned_media_url(category, filename), status_code=307)
+        file_path = local_media_path(category, filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Media file not found")
+    return FileResponse(str(file_path))
 
 
 @app.get("/api/textbooks")
@@ -95,9 +120,9 @@ async def upload_textbook(
         safe_name = f"{uuid4().hex}{suffix}"
         file_path = config.UPLOADS_DIR / safe_name
         file_path.write_bytes(await file.read())
-        file_url = f"/uploads/{safe_name}"
-        storage_path = str(file_path)
         mime_type = file.content_type or ""
+        file_url = upload_media(file_path, "uploads", safe_name, mime_type)
+        storage_path = f"s3://{config.AWS_S3_BUCKET}/{object_key('uploads', safe_name)}" if uses_s3() else str(file_path)
 
     record = create_record("textbooks", {
         "title": title,
@@ -157,6 +182,9 @@ def process_textbook_in_background(record_id, file_path, mime_type, pasted_text,
             "extracted_text": pasted_text or "",
             "chapters": infer_chapters_locally(pasted_text, title),
         })
+    finally:
+        if uses_s3() and file_path:
+            Path(file_path).unlink(missing_ok=True)
 
 
 @app.patch("/api/textbooks/{record_id}")

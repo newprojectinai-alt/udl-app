@@ -4,6 +4,7 @@ import struct
 from pathlib import Path
 
 from . import config
+from .storage import upload_media
 
 
 def write_silent_wav(output_path: Path, duration_seconds: float = 2.0, sample_rate: int = 24000):
@@ -47,5 +48,5 @@ def generate_narration_audio(job_id: str, text: str):
 
     return {
         "audio_path": output_path,
-        "audio_url": f"/audio/{job_id}.wav",
+        "audio_url": upload_media(output_path, "audio", f"{job_id}.wav", "audio/wav"),
     }

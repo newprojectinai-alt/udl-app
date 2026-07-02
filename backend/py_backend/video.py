@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from . import config
 from .ai import generate_video_storyboard
 from .database import create_record, filter_records, get_record, update_record
+from .storage import upload_media, uses_s3
 from .text_processing import split_sentences
 from .tts import generate_narration_audio
 
@@ -64,9 +65,10 @@ def render_video_job(job_id: str):
             raise RuntimeError("Local character and Manim video generation are disabled. Use the Hugging Face renderer.")
         job = get_record("video_jobs", job_id)
         update_job_progress(job_id, job, "Finalizing MP4", 90)
+        video_url = upload_media(output_file, "renders", f"{job_id}.mp4", "video/mp4")
         return update_record("video_jobs", job_id, {
             "status": "completed",
-            "video_url": f"/renders/{job_id}.mp4",
+            "video_url": video_url,
             "provider_metadata": {
                 **(job.get("provider_metadata") or {}),
                 "hf_prompt": hf_result.get("prompt") if renderer_choice == "huggingface" else None,
@@ -88,6 +90,10 @@ def render_video_job(job_id: str):
             },
         })
         raise
+    finally:
+        if uses_s3():
+            (config.RENDERS_DIR / f"{job_id}.mp4").unlink(missing_ok=True)
+            (config.AUDIO_DIR / f"{job_id}.wav").unlink(missing_ok=True)
 
 
 def update_job_progress(job_id: str, job: dict, label: str, percent: int):

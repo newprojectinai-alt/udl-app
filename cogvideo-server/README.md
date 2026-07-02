@@ -46,13 +46,56 @@ Health check:
 http://YOUR_SERVER_IP:8000/health
 ```
 
+For RunPod's HTTP proxy, submit asynchronous jobs through:
+
+```txt
+POST /jobs
+GET /jobs/{job_id}
+GET /jobs/{job_id}/result
+```
+
+The synchronous `POST /generate` endpoint remains available for direct connections that do not have a short proxy timeout.
+
+## Run with Docker
+
+Build from this folder:
+
+```bash
+cd cogvideo-server
+docker build -t cogvideo-server .
+```
+
+Run on a CUDA GPU host:
+
+```bash
+docker run --gpus all --rm -p 8000:8000 \
+  -e VIDEO_API_TOKEN="choose-a-long-random-secret" \
+  -e COGVIDEO_MODEL_ID="zai-org/CogVideoX-5b" \
+  -v cogvideo-cache:/workspace/.cache/huggingface \
+  -v cogvideo-outputs:/workspace/outputs \
+  cogvideo-server
+```
+
+The container exposes FastAPI on port `8000`, caches model files in `/workspace/.cache/huggingface`, and writes generated videos to `/workspace/outputs`.
+
+## RunPod Notes
+
+- Use the Docker image built from `cogvideo-server/Dockerfile`.
+- Pick a CUDA GPU pod, ideally RTX 4090 24 GB VRAM or larger.
+- Expose HTTP port `8000` in the RunPod template.
+- Add `VIDEO_API_TOKEN` as a template environment variable.
+- Mount persistent storage at `/workspace` if you want model downloads to survive pod restarts.
+- Use at least 80 GB container or network volume storage for model cache and generated outputs.
+- If Hugging Face access is required for your model/account, add `HF_TOKEN` as an environment variable.
+
 ## Connect Main Backend
 
 In `backend/.env` on your main app:
 
 ```env
-VIDEO_API_ENDPOINT=http://YOUR_SERVER_IP:8000/generate
+VIDEO_API_ENDPOINT=https://YOUR_POD_ID-8000.proxy.runpod.net/jobs
 VIDEO_API_TOKEN=choose-a-long-random-secret
+VIDEO_API_MODE=async
 HF_VIDEO_MODEL=zai-org/CogVideoX-5b
 ```
 
