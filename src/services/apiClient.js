@@ -1,4 +1,9 @@
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const envApiBaseUrl = import.meta.env.VITE_API_BASE_URL || '';
+const defaultApiBaseUrl = import.meta.env.DEV ? 'http://localhost:5000' : '';
+const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
+const configuredApiBaseUrl = isHttpsPage && envApiBaseUrl.startsWith('http://')
+  ? ''
+  : envApiBaseUrl || defaultApiBaseUrl;
 
 export const API_BASE_URL = configuredApiBaseUrl.replace(/\/+$/, '');
 export const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true';
