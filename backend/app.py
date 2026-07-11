@@ -1,6 +1,7 @@
 from pathlib import Path
 import random
 import time
+from urllib.parse import unquote
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -433,21 +434,21 @@ async def video_generate(request: Request):
 
 @app.get("/api/videos/lesson/{lesson_id}/latest")
 def video_latest(lesson_id: str):
-    return get_latest_video_job_for_lesson(lesson_id)
+    return with_playable_media_urls(get_latest_video_job_for_lesson(lesson_id))
 
 
 @app.get("/api/videos/{job_id}")
 def video_get(job_id: str):
-    return get_record("video_jobs", job_id)
+    return with_playable_media_urls(get_record("video_jobs", job_id))
 
 
 @app.post("/api/videos/{job_id}/render")
 def video_render(job_id: str, background_tasks: BackgroundTasks):
     job = get_record("video_jobs", job_id)
     if job.get("status") == "rendering":
-        return job
+        return with_playable_media_urls(job)
     if job.get("video_url"):
-        return job
+        return with_playable_media_urls(job)
 
     queued_job = update_record("video_jobs", job_id, {
         "status": "rendering",
@@ -459,7 +460,34 @@ def video_render(job_id: str, background_tasks: BackgroundTasks):
         },
     })
     background_tasks.add_task(render_video_job, job_id)
-    return queued_job
+    return with_playable_media_urls(queued_job)
+
+
+def with_playable_media_urls(job: dict | None):
+    if not job or not uses_s3():
+        return job
+
+    result = dict(job)
+    video_url = result.get("video_url")
+    if isinstance(video_url, str):
+        filename = media_filename_from_url(video_url, "renders")
+        if filename:
+            result["video_url"] = presigned_media_url("renders", filename)
+
+    audio_url = result.get("audio_url")
+    if isinstance(audio_url, str):
+        filename = media_filename_from_url(audio_url, "audio")
+        if filename:
+            result["audio_url"] = presigned_media_url("audio", filename)
+
+    return result
+
+
+def media_filename_from_url(url: str, category: str):
+    prefix = f"/api/media/{category}/"
+    if url.startswith(prefix):
+        return unquote(url[len(prefix):].split("?", 1)[0])
+    return None
 
 
 def normalize_animation_type(animation_type, text):
