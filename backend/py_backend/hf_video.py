@@ -1,4 +1,5 @@
 import json
+import subprocess
 import time
 from pathlib import Path
 from urllib.parse import urljoin
@@ -37,6 +38,8 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
 
     if audio_path and Path(audio_path).exists():
         attach_audio(output_file, Path(audio_path))
+
+    normalize_mp4_for_browser(output_file)
 
     return {
         "output_file": output_file,
@@ -212,6 +215,41 @@ def attach_audio(video_file: Path, audio_path: Path):
     audio_clip.close()
     final_clip.close()
     temp_output.replace(video_file)
+
+
+def normalize_mp4_for_browser(video_file: Path):
+    normalized_output = video_file.with_name(f"{video_file.stem}-browser.mp4")
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(video_file),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a?",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-movflags",
+        "+faststart",
+        str(normalized_output),
+    ]
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg is required to prepare generated videos for browser playback.") from exc
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        raise RuntimeError(f"Could not prepare generated video for browser playback: {details[-800:]}") from exc
+    normalized_output.replace(video_file)
 
 
 def parse_json_response(response):
