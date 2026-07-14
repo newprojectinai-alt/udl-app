@@ -16,6 +16,7 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
         "inputs": prompt,
         "parameters": {
             "num_frames": config.HF_VIDEO_NUM_FRAMES,
+            "num_inference_steps": config.HF_VIDEO_NUM_STEPS,
             "guidance_scale": config.HF_VIDEO_GUIDANCE_SCALE,
         },
         "options": {
@@ -35,16 +36,20 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
         render_async_video(endpoint, headers, payload, output_file)
     else:
         render_sync_video(endpoint, headers, payload, output_file)
+    validate_video_file(output_file, "CogVideoX downloaded output")
 
     if audio_path and Path(audio_path).exists():
         attach_audio(output_file, Path(audio_path))
+        validate_video_file(output_file, "audio muxed output")
 
     normalize_mp4_for_browser(output_file)
+    validate_video_file(output_file, "browser-ready output")
 
     return {
         "output_file": output_file,
         "prompt": prompt,
         "endpoint": endpoint,
+        "output_bytes": output_file.stat().st_size,
     }
 
 
@@ -138,6 +143,7 @@ def save_video_response(response: requests.Response, output_file: Path):
 
     if "video" in content_type or response.content[:8].startswith(b"\x00\x00\x00"):
         output_file.write_bytes(response.content)
+        validate_video_file(output_file, "provider response")
         return
 
     data = parse_json_response(response)
@@ -167,17 +173,19 @@ def build_video_prompt(job: dict):
     title = lesson.get("chapter") or "UDL lesson"
     subject = lesson.get("subject") or "school subject"
     scene_lines = []
-    for scene in scenes[:4]:
+    for scene in scenes[:3]:
         scene_lines.append(
-            f"{scene.get('title') or 'Concept'}: {scene.get('visual_layout') or scene.get('visual_prompt') or scene.get('caption') or ''}"
+            f"{scene.get('title') or 'Concept'} — {scene.get('visual_layout') or scene.get('visual_prompt') or scene.get('caption') or ''}"
         )
-    scene_text = " ".join(scene_lines)[:1200]
+    scene_text = " | ".join(scene_lines)[:1000]
     return (
-        f"High quality educational animated video for students in classes 5 to 10. "
-        f"Subject: {subject}. Lesson: {title}. "
-        f"Show clear visual explanations, smooth camera motion, colorful classroom-friendly animation, "
-        f"simple scientific objects and diagrams, no copyrighted characters, no logos, no confusing text. "
-        f"Visual plan: {scene_text}"
+        f"Create a short 6-second educational animation, not a slideshow. "
+        f"Topic: {subject} - {title}. "
+        f"Use a bright classroom-friendly 2D/3D animation style with clear scientific objects, diagrams, arrows, "
+        f"and smooth motion. Show one continuous visual explanation of the concept. "
+        f"Avoid black screens, blank frames, watermarks, logos, copyrighted characters, realistic faces, and tiny unreadable text. "
+        f"Use simple labels only if they are large and legible. "
+        f"Visual content to animate: {scene_text}"
     ).strip()
 
 
@@ -190,6 +198,7 @@ def download_video(url: str, output_file: Path, headers: dict | None = None):
     if response.status_code >= 400:
         raise RuntimeError(f"Could not download generated video: HTTP {response.status_code}")
     output_file.write_bytes(response.content)
+    validate_video_file(output_file, "downloaded CogVideoX result")
 
 
 def attach_audio(video_file: Path, audio_path: Path):
@@ -250,6 +259,46 @@ def normalize_mp4_for_browser(video_file: Path):
         details = (exc.stderr or exc.stdout or "").strip()
         raise RuntimeError(f"Could not prepare generated video for browser playback: {details[-800:]}") from exc
     normalized_output.replace(video_file)
+
+
+def validate_video_file(video_file: Path, stage: str):
+    if not video_file.is_file():
+        raise RuntimeError(f"{stage} did not create an MP4 file.")
+
+    size = video_file.stat().st_size
+    if size < config.HF_VIDEO_MIN_BYTES:
+        raise RuntimeError(
+            f"{stage} is too small to be a valid generated video ({size} bytes). "
+            "This usually means the GPU worker produced a blank/header-only MP4. "
+            "Check the RunPod job diagnostics/logs, model load status, CUDA memory, and CogVideoX output."
+        )
+
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name,width,height,nb_frames,duration",
+        "-of",
+        "json",
+        str(video_file),
+    ]
+    try:
+        probe = subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError:
+        return
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        raise RuntimeError(f"{stage} is not a readable MP4 video: {details[-500:]}") from exc
+
+    try:
+        streams = json.loads(probe.stdout or "{}").get("streams") or []
+    except Exception:
+        streams = []
+    if not streams:
+        raise RuntimeError(f"{stage} does not contain a video stream.")
 
 
 def parse_json_response(response):

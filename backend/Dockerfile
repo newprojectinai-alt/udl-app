@@ -24,7 +24,7 @@ COPY app.py .
 COPY py_backend ./py_backend
 COPY tts ./tts
 
-RUN mkdir -p uploads renders audio video_frames manim_jobs
+RUN mkdir -p uploads renders audio
 
 EXPOSE 5000
 

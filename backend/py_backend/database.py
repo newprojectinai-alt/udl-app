@@ -65,11 +65,14 @@ def list_records(entity: str, sort: str = "created_at", ascending: bool = False,
     return parse_response(requests.get(table_url(entity), headers=headers(), params=params, timeout=30))
 
 
-def filter_records(entity: str, filters: dict | None = None, limit: int | None = None):
+def filter_records(entity: str, filters: dict | None = None, limit: int | None = None, sort: str = "created_at", ascending: bool = False):
     params = {"select": "*"}
     for key, value in (filters or {}).items():
         if value not in (None, ""):
             params[key] = f"eq.{value}"
+    if sort:
+        direction = "asc" if ascending else "desc"
+        params["order"] = f"{sort}.{direction}"
     if limit:
         params["limit"] = str(limit)
     return parse_response(requests.get(table_url(entity), headers=headers(), params=params, timeout=30))

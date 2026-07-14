@@ -22,9 +22,7 @@ if ($Reload) {
     "--reload-exclude", ".venv/*",
     "--reload-exclude", "uploads/*",
     "--reload-exclude", "audio/*",
-    "--reload-exclude", "renders/*",
-    "--reload-exclude", "video_frames/*",
-    "--reload-exclude", "manim_jobs/*"
+    "--reload-exclude", "renders/*"
   )
 }
 

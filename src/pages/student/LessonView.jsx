@@ -8,23 +8,7 @@ import { ArrowLeft, BookOpen, Brain, ChevronLeft, ChevronRight, Ear, Eye, Lightb
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/AuthContext';
 
-const VIDEO_RENDERER = 'huggingface';
-/*
-const VIDEO_RENDERERS = [
-  { id: 'manim', name: 'Animated Diagram', role: 'Clean Manim motion graphics for science/math ideas', emoji: '📐', gradient: 'from-cyan-500 to-blue-600' },
-  { id: 'cartoon', name: 'Character Guide', role: 'Friendly guide with classroom-style animation', emoji: '🎬', gradient: 'from-pink-500 to-orange-500' },
-];
-const VIDEO_CHARACTERS = [
-  { id: 'maya', name: 'Maya', role: 'Friendly science guide', emoji: '👩‍🔬', gradient: 'from-pink-500 to-rose-500' },
-  { id: 'leo', name: 'Leo', role: 'Curious explorer', emoji: '🧑‍🚀', gradient: 'from-blue-500 to-indigo-600' },
-  { id: 'zara', name: 'Zara', role: 'Calm storyteller', emoji: '👩‍🏫', gradient: 'from-violet-500 to-purple-600' },
-  { id: 'kiko', name: 'Kiko', role: 'Playful robot buddy', emoji: '🤖', gradient: 'from-emerald-500 to-teal-600' },
-  { id: 'milo_cat', name: 'Milo Cat', role: 'Classic mischievous cat', emoji: '🐱', gradient: 'from-slate-500 to-gray-700' },
-  { id: 'pip_mouse', name: 'Pip Mouse', role: 'Clever tiny helper', emoji: '🐭', gradient: 'from-orange-400 to-amber-600' },
-  { id: 'captain_spinach', name: 'Captain Spinach', role: 'Strong sailor mentor', emoji: '⚓', gradient: 'from-cyan-500 to-blue-700' },
-  { id: 'doodle_duck', name: 'Doodle Duck', role: 'Funny cartoon friend', emoji: '🦆', gradient: 'from-yellow-400 to-orange-500' },
-];
-*/
+const VIDEO_RENDERER = 'cogvideo';
 
 export default function LessonView() {
   const { lessonId } = useParams();
@@ -302,7 +286,7 @@ function VideoPipelinePanel({ videoJob, loading, renderLoading, error, onGenerat
         <div>
           <h2 className="font-semibold">MP4 Video Pipeline</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Creates an AI storyboard, narration, captions, and an MP4 using Manim diagrams or a character guide.
+            Creates an AI storyboard, narration, captions, and a CogVideoX MP4 using the RunPod GPU backend.
           </p>
         </div>
         <div className="flex gap-2">
@@ -320,17 +304,17 @@ function VideoPipelinePanel({ videoJob, loading, renderLoading, error, onGenerat
       <div className="mt-5 rounded-2xl bg-gradient-to-r from-blue-50 to-violet-50 border border-blue-100 p-4">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div>
-            <p className="text-sm font-semibold">Hugging Face AI Video</p>
-            <p className="text-xs text-muted-foreground">The backend sends your lesson scenes to a text-to-video model and attaches narration.</p>
+            <p className="text-sm font-semibold">CogVideoX AI Video</p>
+            <p className="text-xs text-muted-foreground">The backend sends your lesson storyboard to RunPod CogVideoX, validates the MP4, and stores it in S3.</p>
           </div>
           <div className="hidden sm:flex px-3 py-2 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-sm font-semibold shadow-sm">
             AI Video
           </div>
         </div>
         <div className="rounded-2xl bg-white/80 border border-blue-100 p-4">
-          <p className="text-sm font-semibold">Local character and Manim renderers are disabled</p>
+          <p className="text-sm font-semibold">Production video uses CogVideoX on RunPod</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Add `HF_TOKEN` and either `HF_VIDEO_MODEL` or `HF_VIDEO_ENDPOINT` in `backend/.env` before rendering.
+            Keep the RunPod pod running and configure `VIDEO_API_ENDPOINT`, `VIDEO_API_TOKEN`, and `VIDEO_API_MODE=async` in the backend.
           </p>
         </div>
       </div>
@@ -570,3 +554,4 @@ function adaptTextForLevel(text, level) {
   if (level === 'advanced') return text;
   return text;
 }
+

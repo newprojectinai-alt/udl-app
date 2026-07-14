@@ -37,7 +37,9 @@ VIDEO_API_POLL_SECONDS = max(1, int(os.getenv("VIDEO_API_POLL_SECONDS", "5")))
 VIDEO_API_REQUEST_TIMEOUT_SECONDS = max(10, int(os.getenv("VIDEO_API_REQUEST_TIMEOUT_SECONDS", "90")))
 HF_VIDEO_TIMEOUT_SECONDS = int(os.getenv("HF_VIDEO_TIMEOUT_SECONDS", "900"))
 HF_VIDEO_NUM_FRAMES = int(os.getenv("HF_VIDEO_NUM_FRAMES", "49"))
+HF_VIDEO_NUM_STEPS = int(os.getenv("HF_VIDEO_NUM_STEPS", "30"))
 HF_VIDEO_GUIDANCE_SCALE = float(os.getenv("HF_VIDEO_GUIDANCE_SCALE", "6.0"))
+HF_VIDEO_MIN_BYTES = max(10240, int(os.getenv("HF_VIDEO_MIN_BYTES", "100000")))
 
 AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "")).strip()
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "").strip()
@@ -48,19 +50,11 @@ PYTHON_COMMAND = os.getenv("PYTHON_COMMAND", "python")
 KOKORO_VOICE = os.getenv("KOKORO_VOICE", "af_heart")
 SKIP_TTS = os.getenv("SKIP_TTS", "false").lower() == "true"
 
-VIDEO_WIDTH = int(os.getenv("VIDEO_WIDTH", "854"))
-VIDEO_HEIGHT = int(os.getenv("VIDEO_HEIGHT", "480"))
 VIDEO_FPS = int(os.getenv("VIDEO_FPS", "20"))
-VIDEO_DURATION_SECONDS = int(os.getenv("VIDEO_DURATION_SECONDS", "30"))
-CARTOON_FRAME_FPS = int(os.getenv("CARTOON_FRAME_FPS", "8"))
-MANIM_QUALITY = os.getenv("MANIM_QUALITY", "l")
-MANIM_RENDER_TIMEOUT_SECONDS = int(os.getenv("MANIM_RENDER_TIMEOUT_SECONDS", "240"))
 
 UPLOADS_DIR = BACKEND_ROOT / "uploads"
 RENDERS_DIR = BACKEND_ROOT / "renders"
 AUDIO_DIR = BACKEND_ROOT / "audio"
-VIDEO_FRAMES_DIR = BACKEND_ROOT / "video_frames"
-MANIM_JOBS_DIR = BACKEND_ROOT / "manim_jobs"
 
-for directory in (UPLOADS_DIR, RENDERS_DIR, AUDIO_DIR, VIDEO_FRAMES_DIR, MANIM_JOBS_DIR):
+for directory in (UPLOADS_DIR, RENDERS_DIR, AUDIO_DIR):
     directory.mkdir(parents=True, exist_ok=True)

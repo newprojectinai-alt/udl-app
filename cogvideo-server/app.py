@@ -10,6 +10,7 @@ from diffusers import CogVideoXPipeline
 from diffusers.utils import export_to_video
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
+from PIL import ImageStat
 from pydantic import BaseModel
 
 
@@ -19,6 +20,7 @@ OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "outputs"))
 NUM_FRAMES = int(os.getenv("COGVIDEO_NUM_FRAMES", "49"))
 NUM_STEPS = int(os.getenv("COGVIDEO_NUM_STEPS", "35"))
 GUIDANCE_SCALE = float(os.getenv("COGVIDEO_GUIDANCE_SCALE", "6.0"))
+MIN_VIDEO_BYTES = max(10240, int(os.getenv("COGVIDEO_MIN_VIDEO_BYTES", "100000")))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 JOB_DIR = OUTPUT_DIR / "jobs"
 JOB_DIR.mkdir(parents=True, exist_ok=True)
@@ -125,11 +127,12 @@ def run_video_job(job_id: str, prompt: str, params: dict):
         write_job(job_id, {"status": "running", "updated_at": int(time.time())})
         try:
             output_path = JOB_DIR / f"{job_id}.mp4"
-            render_video(prompt, params, output_path)
+            diagnostics = render_video(prompt, params, output_path)
             write_job(job_id, {
                 "status": "completed",
                 "updated_at": int(time.time()),
                 "error": None,
+                "diagnostics": diagnostics,
             })
         except Exception as exc:
             write_job(job_id, {
@@ -143,16 +146,66 @@ def render_video(prompt: str, params: dict, output_path: Path):
     if pipe is None:
         raise RuntimeError("CogVideoX model is not loaded")
 
-    generator = torch.Generator(device="cuda").manual_seed(int(params.get("seed", 42)))
+    seed = int(params.get("seed", 42))
+    num_inference_steps = int(params.get("num_inference_steps", NUM_STEPS))
+    num_frames = int(params.get("num_frames", NUM_FRAMES))
+    guidance_scale = float(params.get("guidance_scale", GUIDANCE_SCALE))
+
+    generator = torch.Generator(device="cuda").manual_seed(seed)
     frames = pipe(
         prompt=prompt[:1800],
         num_videos_per_prompt=1,
-        num_inference_steps=int(params.get("num_inference_steps", NUM_STEPS)),
-        num_frames=int(params.get("num_frames", NUM_FRAMES)),
-        guidance_scale=float(params.get("guidance_scale", GUIDANCE_SCALE)),
+        num_inference_steps=num_inference_steps,
+        num_frames=num_frames,
+        guidance_scale=guidance_scale,
         generator=generator,
     ).frames[0]
+    frame_diagnostics = inspect_frames(frames)
+    if frame_diagnostics["sample_average_stddev"] < 1.0:
+        raise RuntimeError(f"CogVideoX produced near-blank frames: {frame_diagnostics}")
+
     export_to_video(frames, str(output_path), fps=8)
+    output_bytes = output_path.stat().st_size if output_path.is_file() else 0
+    if output_bytes < MIN_VIDEO_BYTES:
+        raise RuntimeError(
+            f"CogVideoX exported a tiny invalid MP4 ({output_bytes} bytes). "
+            f"Frame diagnostics: {frame_diagnostics}"
+        )
+    return {
+        "output_bytes": output_bytes,
+        "frame_count": len(frames),
+        "parameters": {
+            "seed": seed,
+            "num_frames": num_frames,
+            "num_inference_steps": num_inference_steps,
+            "guidance_scale": guidance_scale,
+        },
+        "frame_diagnostics": frame_diagnostics,
+        "prompt_excerpt": prompt[:500],
+    }
+
+
+def inspect_frames(frames):
+    if not frames:
+        raise RuntimeError("CogVideoX returned zero frames")
+    sample_indexes = sorted(set([0, len(frames) // 2, len(frames) - 1]))
+    samples = []
+    for index in sample_indexes:
+        frame = frames[index].convert("RGB")
+        stat = ImageStat.Stat(frame)
+        average_stddev = sum(stat.stddev) / len(stat.stddev)
+        samples.append({
+            "index": index,
+            "size": list(frame.size),
+            "mean": [round(value, 3) for value in stat.mean],
+            "stddev": [round(value, 3) for value in stat.stddev],
+            "average_stddev": round(average_stddev, 3),
+        })
+    return {
+        "sample_count": len(samples),
+        "sample_average_stddev": round(sum(item["average_stddev"] for item in samples) / len(samples), 3),
+        "samples": samples,
+    }
 
 
 def job_metadata_path(job_id: str):
@@ -194,4 +247,6 @@ def public_job(job: dict):
     }
     if job.get("status") == "completed":
         result["result_url"] = f"/jobs/{job_id}/result"
+    if job.get("diagnostics"):
+        result["diagnostics"] = job.get("diagnostics")
     return result
