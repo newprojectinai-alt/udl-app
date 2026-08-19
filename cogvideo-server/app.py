@@ -21,6 +21,8 @@ NUM_FRAMES = int(os.getenv("COGVIDEO_NUM_FRAMES", "49"))
 NUM_STEPS = int(os.getenv("COGVIDEO_NUM_STEPS", "35"))
 GUIDANCE_SCALE = float(os.getenv("COGVIDEO_GUIDANCE_SCALE", "6.0"))
 MIN_VIDEO_BYTES = max(10240, int(os.getenv("COGVIDEO_MIN_VIDEO_BYTES", "100000")))
+MAX_ATTEMPTS = max(1, int(os.getenv("COGVIDEO_MAX_ATTEMPTS", "2")))
+BLANK_STDDEV_THRESHOLD = float(os.getenv("COGVIDEO_BLANK_STDDEV_THRESHOLD", "1.0"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 JOB_DIR = OUTPUT_DIR / "jobs"
 JOB_DIR.mkdir(parents=True, exist_ok=True)
@@ -151,18 +153,39 @@ def render_video(prompt: str, params: dict, output_path: Path):
     num_frames = int(params.get("num_frames", NUM_FRAMES))
     guidance_scale = float(params.get("guidance_scale", GUIDANCE_SCALE))
 
-    generator = torch.Generator(device="cuda").manual_seed(seed)
-    frames = pipe(
-        prompt=prompt[:1800],
-        num_videos_per_prompt=1,
-        num_inference_steps=num_inference_steps,
-        num_frames=num_frames,
-        guidance_scale=guidance_scale,
-        generator=generator,
-    ).frames[0]
-    frame_diagnostics = inspect_frames(frames)
-    if frame_diagnostics["sample_average_stddev"] < 1.0:
-        raise RuntimeError(f"CogVideoX produced near-blank frames: {frame_diagnostics}")
+    attempts = []
+    last_frames = None
+    last_prompt = prompt
+    last_seed = seed
+    for attempt_index in range(MAX_ATTEMPTS):
+        attempt_seed = seed + (attempt_index * 101)
+        attempt_prompt = build_attempt_prompt(prompt, attempt_index)
+        generator = torch.Generator(device="cuda").manual_seed(attempt_seed)
+        frames = pipe(
+            prompt=attempt_prompt[:1800],
+            num_videos_per_prompt=1,
+            num_inference_steps=num_inference_steps,
+            num_frames=num_frames,
+            guidance_scale=guidance_scale,
+            generator=generator,
+        ).frames[0]
+        frame_diagnostics = inspect_frames(frames)
+        attempts.append({
+            "attempt": attempt_index + 1,
+            "seed": attempt_seed,
+            "frame_diagnostics": frame_diagnostics,
+            "prompt_excerpt": attempt_prompt[:500],
+        })
+        last_frames = frames
+        last_prompt = attempt_prompt
+        last_seed = attempt_seed
+        if frame_diagnostics["sample_average_stddev"] >= BLANK_STDDEV_THRESHOLD:
+            break
+    else:
+        raise RuntimeError(f"CogVideoX produced near-blank frames after {MAX_ATTEMPTS} attempts: {attempts}")
+
+    frames = last_frames
+    frame_diagnostics = attempts[-1]["frame_diagnostics"]
 
     export_to_video(frames, str(output_path), fps=8)
     output_bytes = output_path.stat().st_size if output_path.is_file() else 0
@@ -176,13 +199,32 @@ def render_video(prompt: str, params: dict, output_path: Path):
         "frame_count": len(frames),
         "parameters": {
             "seed": seed,
+            "actual_seed": last_seed,
             "num_frames": num_frames,
             "num_inference_steps": num_inference_steps,
             "guidance_scale": guidance_scale,
         },
         "frame_diagnostics": frame_diagnostics,
-        "prompt_excerpt": prompt[:500],
+        "attempts": attempts,
+        "prompt_excerpt": last_prompt[:500],
     }
+
+
+def build_attempt_prompt(prompt: str, attempt_index: int):
+    visual_guard = (
+        "High contrast colorful educational animation with visible objects filling the frame. "
+        "Use saturated blue, orange, green, and purple shapes on a non-white background. "
+        "Show clear motion, arrows, diagrams, particles, icons, and large simple objects. "
+        "Do not produce a blank white screen, plain background, empty slide, title card only, or faded low-contrast image. "
+    )
+    if attempt_index == 0:
+        return f"{visual_guard}{prompt}"
+    return (
+        f"{visual_guard}"
+        "Retry with a simpler concrete scene: animated classroom science diagram, colorful labeled objects, "
+        "moving arrows, particles interacting, camera slowly pushes in. "
+        f"Lesson request: {prompt}"
+    )
 
 
 def inspect_frames(frames):

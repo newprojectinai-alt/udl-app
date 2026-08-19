@@ -70,6 +70,8 @@ def render_video_job(job_id: str):
             "provider_metadata": {
                 **(job.get("provider_metadata") or {}),
                 "hf_prompt": video_result.get("prompt"),
+                "hf_prompts": video_result.get("prompts"),
+                "scene_count": video_result.get("scene_count"),
                 "hf_endpoint": video_result.get("endpoint"),
                 "video_output_bytes": video_result.get("output_bytes"),
                 "video_output": str(output_file),

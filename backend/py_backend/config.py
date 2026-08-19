@@ -40,6 +40,8 @@ HF_VIDEO_NUM_FRAMES = int(os.getenv("HF_VIDEO_NUM_FRAMES", "49"))
 HF_VIDEO_NUM_STEPS = int(os.getenv("HF_VIDEO_NUM_STEPS", "30"))
 HF_VIDEO_GUIDANCE_SCALE = float(os.getenv("HF_VIDEO_GUIDANCE_SCALE", "6.0"))
 HF_VIDEO_MIN_BYTES = max(10240, int(os.getenv("HF_VIDEO_MIN_BYTES", "100000")))
+HF_VIDEO_RENDER_SCENES = os.getenv("HF_VIDEO_RENDER_SCENES", "true").lower() == "true"
+HF_VIDEO_MAX_SCENES = max(1, int(os.getenv("HF_VIDEO_MAX_SCENES", "6")))
 
 AWS_REGION = os.getenv("AWS_REGION", os.getenv("AWS_DEFAULT_REGION", "")).strip()
 AWS_S3_BUCKET = os.getenv("AWS_S3_BUCKET", "").strip()

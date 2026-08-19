@@ -11,18 +11,6 @@ from . import config
 
 def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_path: Path | None = None):
     endpoint = get_hf_endpoint()
-    prompt = build_video_prompt(job)
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "num_frames": config.HF_VIDEO_NUM_FRAMES,
-            "num_inference_steps": config.HF_VIDEO_NUM_STEPS,
-            "guidance_scale": config.HF_VIDEO_GUIDANCE_SCALE,
-        },
-        "options": {
-            "wait_for_model": True,
-        },
-    }
     headers = {
         "Accept": "video/mp4,application/json",
         "Content-Type": "application/json",
@@ -32,10 +20,11 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
     elif config.HF_TOKEN:
         headers["Authorization"] = f"Bearer {config.HF_TOKEN}"
 
-    if config.VIDEO_API_MODE == "async":
-        render_async_video(endpoint, headers, payload, output_file)
+    prompts = build_scene_video_prompts(job) if config.HF_VIDEO_RENDER_SCENES else [build_video_prompt(job)]
+    if len(prompts) == 1:
+        render_provider_video(endpoint, headers, build_video_payload(prompts[0], 0), output_file)
     else:
-        render_sync_video(endpoint, headers, payload, output_file)
+        render_scene_clips(endpoint, headers, prompts, output_file)
     validate_video_file(output_file, "CogVideoX downloaded output")
 
     if audio_path and Path(audio_path).exists():
@@ -47,10 +36,55 @@ def render_huggingface_video(job_id: str, job: dict, output_file: Path, audio_pa
 
     return {
         "output_file": output_file,
-        "prompt": prompt,
+        "prompt": prompts[0],
+        "prompts": prompts,
+        "scene_count": len(prompts),
         "endpoint": endpoint,
         "output_bytes": output_file.stat().st_size,
     }
+
+
+def build_video_payload(prompt: str, scene_index: int):
+    return {
+        "inputs": prompt,
+        "parameters": {
+            "num_frames": config.HF_VIDEO_NUM_FRAMES,
+            "num_inference_steps": config.HF_VIDEO_NUM_STEPS,
+            "guidance_scale": config.HF_VIDEO_GUIDANCE_SCALE,
+            "seed": (int(time.time()) + scene_index * 7919) % 2147483647,
+        },
+        "options": {
+            "wait_for_model": True,
+        },
+    }
+
+
+def render_provider_video(endpoint: str, headers: dict, payload: dict, output_file: Path):
+    if config.VIDEO_API_MODE == "async":
+        render_async_video(endpoint, headers, payload, output_file)
+    else:
+        render_sync_video(endpoint, headers, payload, output_file)
+
+
+def render_scene_clips(endpoint: str, headers: dict, prompts: list[str], output_file: Path):
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    scene_dir = output_file.with_suffix("")
+    scene_dir.mkdir(parents=True, exist_ok=True)
+    clip_paths = []
+    try:
+        for index, prompt in enumerate(prompts):
+            clip_path = scene_dir / f"scene-{index + 1:02d}.mp4"
+            render_provider_video(endpoint, headers, build_video_payload(prompt, index), clip_path)
+            validate_video_file(clip_path, f"CogVideoX scene {index + 1} output")
+            clip_paths.append(clip_path)
+        concatenate_videos(clip_paths, output_file)
+    finally:
+        for clip_path in clip_paths:
+            clip_path.unlink(missing_ok=True)
+        try:
+            scene_dir.rmdir()
+        except OSError:
+            pass
 
 
 def render_sync_video(endpoint: str, headers: dict, payload: dict, output_file: Path):
@@ -179,14 +213,42 @@ def build_video_prompt(job: dict):
         )
     scene_text = " | ".join(scene_lines)[:1000]
     return (
-        f"Create a short 6-second educational animation, not a slideshow. "
+        f"Create a short 6-second educational animation, not a slideshow or title card. "
         f"Topic: {subject} - {title}. "
-        f"Use a bright classroom-friendly 2D/3D animation style with clear scientific objects, diagrams, arrows, "
-        f"and smooth motion. Show one continuous visual explanation of the concept. "
-        f"Avoid black screens, blank frames, watermarks, logos, copyrighted characters, realistic faces, and tiny unreadable text. "
+        f"Use a colorful high-contrast 2D/3D animation style with visible scientific objects filling the frame, diagrams, arrows, "
+        f"particles, icons, and smooth motion. Use saturated blue, orange, green, and purple on a non-white background. "
+        f"Show one continuous visual explanation of the concept with moving objects. "
+        f"Avoid white screens, black screens, blank frames, empty slides, watermarks, logos, copyrighted characters, realistic faces, and tiny unreadable text. "
         f"Use simple labels only if they are large and legible. "
         f"Visual content to animate: {scene_text}"
     ).strip()
+
+
+def build_scene_video_prompts(job: dict):
+    lesson = job.get("lesson_contents") or {}
+    scenes = (job.get("scenes") or [])[:config.HF_VIDEO_MAX_SCENES]
+    if not scenes:
+        return [build_video_prompt(job)]
+
+    title = lesson.get("chapter") or "UDL lesson"
+    subject = lesson.get("subject") or "school subject"
+    prompts = []
+    for index, scene in enumerate(scenes):
+        visual_text = scene.get("visual_layout") or scene.get("visual_prompt") or scene.get("image_prompt") or scene.get("caption") or ""
+        narration = scene.get("narration") or scene.get("caption") or ""
+        on_screen_text = ", ".join(scene.get("on_screen_text") or [])
+        prompts.append((
+            f"Create scene {index + 1} of a textbook-based educational video for Class {lesson.get('class_level') or ''} {subject}, chapter {title}. "
+            f"Teach this exact concept clearly: {scene.get('title') or title}. "
+            f"Visual explanation: {visual_text}. "
+            f"Narration meaning to support visually: {narration}. "
+            f"Use high-contrast colorful 2D/3D educational animation, visible objects filling the frame, arrows, diagrams, particles, icons, and smooth motion. "
+            f"Use saturated blue, orange, green, and purple on a non-white background. "
+            f"Include only these large readable labels if useful: {on_screen_text}. "
+            f"Do not create a blank screen, white slide, title card only, static poster, watermark, logo, realistic face, or tiny unreadable text. "
+            f"Make the frame teach the concept visually even without audio."
+        ).strip()[:1800])
+    return prompts
 
 
 def download_video(url: str, output_file: Path, headers: dict | None = None):
@@ -224,6 +286,69 @@ def attach_audio(video_file: Path, audio_path: Path):
     audio_clip.close()
     final_clip.close()
     temp_output.replace(video_file)
+
+
+def concatenate_videos(clip_paths: list[Path], output_file: Path):
+    if not clip_paths:
+        raise RuntimeError("No scene clips were generated.")
+
+    list_file = output_file.with_name(f"{output_file.stem}-clips.txt")
+    normalized_paths = []
+    try:
+        for index, clip_path in enumerate(clip_paths):
+            normalized_path = output_file.with_name(f"{output_file.stem}-scene-{index + 1:02d}-normalized.mp4")
+            normalize_clip_for_concat(clip_path, normalized_path)
+            normalized_paths.append(normalized_path)
+
+        list_file.write_text(
+            "\n".join(f"file '{path.as_posix()}'" for path in normalized_paths),
+            encoding="utf-8",
+        )
+        command = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            "-c",
+            "copy",
+            str(output_file),
+        ]
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise RuntimeError("ffmpeg is required to stitch scene videos together.") from exc
+    except subprocess.CalledProcessError as exc:
+        details = (exc.stderr or exc.stdout or "").strip()
+        raise RuntimeError(f"Could not stitch generated scene videos: {details[-800:]}") from exc
+    finally:
+        list_file.unlink(missing_ok=True)
+        for normalized_path in normalized_paths:
+            normalized_path.unlink(missing_ok=True)
+
+
+def normalize_clip_for_concat(input_file: Path, output_file: Path):
+    command = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_file),
+        "-an",
+        "-vf",
+        "scale=720:480:force_original_aspect_ratio=decrease,pad=720:480:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=8",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        str(output_file),
+    ]
+    subprocess.run(command, check=True, capture_output=True, text=True)
 
 
 def normalize_mp4_for_browser(video_file: Path):
