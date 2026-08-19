@@ -19,10 +19,10 @@ $uvicornArgs = @(
 if ($Reload) {
   $uvicornArgs += @(
     "--reload",
-    "--reload-exclude", ".venv/*",
-    "--reload-exclude", "uploads/*",
-    "--reload-exclude", "audio/*",
-    "--reload-exclude", "renders/*"
+    "--reload-exclude=.venv/*",
+    "--reload-exclude=uploads/*",
+    "--reload-exclude=audio/*",
+    "--reload-exclude=renders/*"
   )
 }
 

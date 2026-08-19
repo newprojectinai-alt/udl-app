@@ -26,8 +26,9 @@ export default function StudentLessons() {
   const availableClasses = [...new Set(readyTextbooks.map((item) => item.class_level))].sort();
   const visibleClass = classLevel || availableClasses[0] || '';
   const subjects = [...new Set(readyTextbooks.filter((item) => !visibleClass || item.class_level === visibleClass).map((item) => item.subject))];
-  const selectedTextbook = textbooks.find((item) => item.subject === selectedSubject && item.class_level === visibleClass);
-  const chapters = selectedTextbook?.chapters || [];
+  const matchingTextbooks = readyTextbooks.filter((item) => item.subject === selectedSubject && item.class_level === visibleClass);
+  const chapters = [...new Set(matchingTextbooks.flatMap((item) => item.chapters || []))];
+  const selectedTextbook = matchingTextbooks.find((item) => (item.chapters || []).includes(selectedChapter)) || matchingTextbooks[0];
 
   const handleStartLesson = async () => {
     if (!visibleClass || !selectedSubject || !selectedChapter) return toast.error('Please select class, subject, and chapter');
